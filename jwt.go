@@ -12,47 +12,30 @@ import (
 	"github.com/twinj/uuid"
 )
 
-type TokenDetails struct {
-	AccessToken         string
-	RefreshToken        string
-	AccessTokenUuid     string
-	RefreshTokenUuid    string
-	AccessTokenExpires  int64
-	RefreshTokenExpires int64
-}
-
-func NewTokenDetails(login string) (*TokenDetails, error) {
-	tokenDetails := &TokenDetails{}
-	tokenDetails.AccessTokenUuid = uuid.NewV4().String()
-	tokenDetails.AccessTokenExpires = time.Now().Add(time.Duration(config.JWTConfig.AccessKeyLifetime) * time.Second).Unix()
-	tokenDetails.RefreshTokenUuid = uuid.NewV4().String()
-	tokenDetails.RefreshTokenExpires = time.Now().Add(time.Duration(config.JWTConfig.RefreshKeyLifeTime) * time.Second).Unix()
-
-	var err error
-
+func GetSignedTokens(login string) (string, string, error) {
 	accessToken := jwt.New()
-	accessToken.Set(jwt.JwtIDKey, tokenDetails.AccessTokenUuid)
+	accessToken.Set(jwt.JwtIDKey, uuid.NewV4().String())
 	accessToken.Set(jwt.SubjectKey, config.JWTConfig.Subject)
 	accessToken.Set("login", login)
-	accessToken.Set(jwt.ExpirationKey, tokenDetails.AccessTokenExpires)
+	accessToken.Set(jwt.ExpirationKey, time.Now().Add(time.Duration(config.JWTConfig.AccessKeyLifetime)*time.Second).Unix())
 	signed, err := jwt.Sign(accessToken, jwa.HS256, accessKey)
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
-	tokenDetails.AccessToken = string(signed)
+	signedAccessToken := string(signed)
 
 	refreshToken := jwt.New()
-	refreshToken.Set(jwt.JwtIDKey, tokenDetails.RefreshTokenUuid)
+	refreshToken.Set(jwt.JwtIDKey, uuid.NewV4().String())
 	refreshToken.Set(jwt.SubjectKey, config.JWTConfig.Subject)
 	refreshToken.Set("login", login)
-	refreshToken.Set(jwt.ExpirationKey, tokenDetails.RefreshTokenExpires)
+	refreshToken.Set(jwt.ExpirationKey, time.Now().Add(time.Duration(config.JWTConfig.RefreshKeyLifeTime)*time.Second).Unix())
 	signed, err = jwt.Sign(refreshToken, jwa.HS256, refreshKey)
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
-	tokenDetails.RefreshToken = string(signed)
+	signedRefreshToken := string(signed)
 
-	return tokenDetails, nil
+	return signedAccessToken, signedRefreshToken, nil
 }
 
 // initKeySets initializes global variables concerning jwt keys.

@@ -32,7 +32,7 @@ func handleLogin(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "incorrect username or password"})
 		return
 	}
-	tokenDetails, err := NewTokenDetails(user.Login)
+	accessToken, refreshToken, err := GetSignedTokens(user.Login)
 	if err != nil {
 		text := "failed to generate tokens"
 		logger.Error("%s: %s", text, err.Error())
@@ -40,8 +40,8 @@ func handleLogin(c *gin.Context) {
 		return
 	}
 	tokens := map[string]string{
-		"access_token":  tokenDetails.AccessToken,
-		"refresh_token": tokenDetails.RefreshToken,
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
 	}
 	c.JSON(http.StatusOK, tokens)
 }
