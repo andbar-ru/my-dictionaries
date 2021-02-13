@@ -21,10 +21,11 @@ type LogConfig struct {
 
 // JWTConfig stores JWT configuration.
 type JWTConfig struct {
-	Realm      string `json:"realm"`
-	Key        string `json:"key"`
-	Timeout    int    `json:"timeout"`
-	MaxRefresh int    `json:"maxRefresh"`
+	Subject            string `json:"subject"`
+	AccessKey          string `json:"accessKey"`
+	RefreshKey         string `json:"refreshKey"`
+	AccessKeyLifetime  int    `json:"accessKeyLifetime"`
+	RefreshKeyLifeTime int    `json:"refreshKeyLifeTime"`
 }
 
 // GetConfig reads config file and decodes it into Config.
