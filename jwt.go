@@ -56,12 +56,20 @@ func initKeySets() {
 	refreshKeySet.Add(refreshKey)
 }
 
-func validateToken(r *http.Request) error {
+func validateRequestToken(r *http.Request) error {
 	token, err := extractToken(r)
 	if err != nil {
 		return err
 	}
-	err = jwt.Validate(token, jwt.WithSubject(config.JWTConfig.Subject))
+	err = validateToken(token)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateToken(token jwt.Token) error {
+	err := jwt.Validate(token, jwt.WithSubject(config.JWTConfig.Subject))
 	if err != nil {
 		return errors.New("token is not valid")
 	}

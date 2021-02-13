@@ -7,7 +7,7 @@ import (
 )
 
 func JWTMiddleware(c *gin.Context) {
-	err := validateToken(c.Request)
+	err := validateRequestToken(c.Request)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "unauthorized"})
 	}

@@ -39,7 +39,7 @@ func main() {
 
 	router := gin.Default()
 	router.GET("/login", handleLogin)
-	// router.GET("/refresh_token", jwtMiddleware.MiddlewareFunc(), jwtMiddleware.RefreshHandler)
+	router.POST("/refresh_token", handleRefreshToken)
 
 	api := router.Group("/api")
 	api.Use(JWTMiddleware)
