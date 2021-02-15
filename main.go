@@ -8,10 +8,6 @@ import (
 	"github.com/lestrrat-go/jwx/jwk"
 )
 
-const (
-	identityKey = "login"
-)
-
 // Global variables
 var (
 	config        *Config

@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/lestrrat-go/jwx/jwt"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -33,7 +32,7 @@ func handleLogin(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "incorrect username or password"})
 		return
 	}
-	accessToken, refreshToken, err := GetSignedTokens(user.Login)
+	accessToken, refreshToken, err := generateTokens(user.Login)
 	if err != nil {
 		text := "failed to generate tokens"
 		logger.Error("%s: %s", text, err.Error())
@@ -60,28 +59,22 @@ func handleRefreshToken(c *gin.Context) {
 		return
 	}
 
-	// Validate refresh token.
-	refreshToken, err := jwt.ParseString(refreshTokenStr, jwt.WithKeySet(refreshKeySet))
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "refresh token is not valid"})
-		return
-	}
-	err = validateToken(refreshToken)
+	refreshToken, err := validateToken(refreshTokenStr, RefreshToken)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "refresh token is not valid or expired"})
 		return
 	}
 
 	// Create new pair of access and refresh tokens.
-	loginI, ok := refreshToken.Get("login")
-	login, loginIsString := loginI.(string)
-	if !ok || !loginIsString || login == "" {
+	loginI, _ := refreshToken.Get("login")
+	login, _ := loginI.(string)
+	if login == "" {
 		text := "unexpected error: could not find login in refresh token"
 		logger.Error(text)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": text})
 		return
 	}
-	newAccessToken, newRefreshToken, err := GetSignedTokens(login)
+	newAccessToken, newRefreshToken, err := generateTokens(login)
 	if err != nil {
 		text := "failed to generate tokens"
 		logger.Error("%s: %s", text, err.Error())

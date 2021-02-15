@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -12,7 +13,15 @@ import (
 	"github.com/twinj/uuid"
 )
 
-func GetSignedTokens(login string) (string, string, error) {
+type TokenType string
+
+const (
+	AccessToken  TokenType = "AccessToken"
+	RefreshToken TokenType = "RefreshToken"
+)
+
+func generateTokens(login string) (string, string, error) {
+	// Generate access token
 	accessToken := jwt.New()
 	accessToken.Set(jwt.JwtIDKey, uuid.NewV4().String())
 	accessToken.Set(jwt.SubjectKey, config.JWTConfig.Subject)
@@ -24,6 +33,7 @@ func GetSignedTokens(login string) (string, string, error) {
 	}
 	signedAccessToken := string(signed)
 
+	// Generate refresh token
 	refreshToken := jwt.New()
 	refreshToken.Set(jwt.JwtIDKey, uuid.NewV4().String())
 	refreshToken.Set(jwt.SubjectKey, config.JWTConfig.Subject)
@@ -34,6 +44,16 @@ func GetSignedTokens(login string) (string, string, error) {
 		return "", "", err
 	}
 	signedRefreshToken := string(signed)
+
+	// Save tokens to database.
+	_, err = db.NamedExec("UPDATE users SET access_token=:access_token, refresh_token=:refresh_token WHERE login=:login", User{
+		Login:        login,
+		AccessToken:  signedAccessToken,
+		RefreshToken: signedRefreshToken,
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("could not save tokens to db: %s", err.Error())
+	}
 
 	return signedAccessToken, signedRefreshToken, nil
 }
@@ -57,38 +77,84 @@ func initKeySets() {
 }
 
 func validateRequestToken(r *http.Request) error {
-	token, err := extractToken(r)
+	token, err := extractTokenString(r)
 	if err != nil {
 		return err
 	}
-	err = validateToken(token)
+	_, err = validateToken(token, AccessToken)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func validateToken(token jwt.Token) error {
-	err := jwt.Validate(token, jwt.WithSubject(config.JWTConfig.Subject))
+func validateToken(tokenString string, tokenType TokenType) (jwt.Token, error) {
+	if tokenType != AccessToken && tokenType != RefreshToken {
+		err := fmt.Errorf("unexpected token type %s", tokenType)
+		logger.Error(err.Error())
+		return nil, err
+	}
+
+	var token jwt.Token
+	var err error
+
+	switch tokenType {
+	case AccessToken:
+		token, err = jwt.ParseString(tokenString, jwt.WithKeySet(accessKeySet))
+	case RefreshToken:
+		token, err = jwt.ParseString(tokenString, jwt.WithKeySet(refreshKeySet))
+	}
+
 	if err != nil {
-		return errors.New("token is not valid")
+		return nil, errors.New("could not parse signed token")
 	}
-	loginI, ok := token.Get("login")
-	login, loginIsString := loginI.(string)
-	if !ok || !loginIsString || login == "" {
-		return errors.New("token is not valid")
+
+	loginI, _ := token.Get("login")
+	login, _ := loginI.(string)
+	if login == "" {
+		return nil, errors.New("could not find login in token")
 	}
-	return nil
+
+	var dbToken string
+
+	switch tokenType {
+	case AccessToken:
+		err = db.QueryRowx("SELECT access_token FROM users WHERE login = ?", login).Scan(&dbToken)
+	case RefreshToken:
+		err = db.QueryRowx("SELECT refresh_token FROM users WHERE login = ?", login).Scan(&dbToken)
+	}
+
+	if err != nil {
+		return nil, errors.New("token is not valid")
+	}
+	if tokenString != dbToken {
+		return nil, errors.New("token is not valid")
+	}
+
+	err = jwt.Validate(token)
+	if err != nil {
+		return nil, errors.New("token is expired")
+	}
+
+	return token, nil
 }
 
-func extractToken(r *http.Request) (jwt.Token, error) {
+func extractTokenString(r *http.Request) (string, error) {
 	authHeader := r.Header.Get("Authorization")
 	authHeaderParts := strings.Split(authHeader, "Bearer ")
 	if len(authHeaderParts) < 2 {
-		return nil, errors.New("there is not bearer authorization")
+		return "", errors.New("there is not bearer authorization")
 	}
-	tokenStr := authHeaderParts[1]
-	token, err := jwt.ParseString(tokenStr, jwt.WithKeySet(accessKeySet))
+	token := authHeaderParts[1]
+	return token, nil
+}
+
+func extractToken(r *http.Request) (jwt.Token, error) {
+	extractTokenStr, err := extractTokenString(r)
+	if err != nil {
+		return nil, err
+	}
+	token, err := jwt.ParseString(extractTokenStr, jwt.WithKeySet(accessKeySet))
 	if err != nil {
 		return nil, err
 	}
