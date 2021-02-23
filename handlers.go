@@ -15,8 +15,7 @@ func handleLogin(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "missing username or password"})
 		return
 	}
-	var user User
-	err := db.QueryRowx("SELECT login, password_hash FROM users WHERE login = ?", login).StructScan(&user)
+	passwordHash, err := userGetPasswordHash(login)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "incorrect username or password"})
@@ -27,12 +26,12 @@ func handleLogin(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": text})
 		return
 	}
-	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
+	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"message": "incorrect username or password"})
 		return
 	}
-	accessToken, refreshToken, err := generateTokens(user.Login)
+	accessToken, refreshToken, err := generateTokens(login)
 	if err != nil {
 		text := "failed to generate tokens"
 		logger.Error("%s: %s", text, err.Error())
@@ -63,7 +62,7 @@ func handleLogout(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": text})
 		return
 	}
-	_, err = db.NamedExec("UPDATE users SET access_token='', refresh_token='' WHERE login = :login", User{Login: login})
+	err = userClearTokens(login)
 	if err != nil {
 		text := "failed to clear tokens of user " + login
 		logger.Error("%s: %s", text, err.Error())

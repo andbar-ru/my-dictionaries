@@ -13,13 +13,6 @@ import (
 	"github.com/twinj/uuid"
 )
 
-type TokenType string
-
-const (
-	AccessToken  TokenType = "AccessToken"
-	RefreshToken TokenType = "RefreshToken"
-)
-
 func generateTokens(login string) (string, string, error) {
 	// Generate access token
 	accessToken := jwt.New()
@@ -46,11 +39,7 @@ func generateTokens(login string) (string, string, error) {
 	signedRefreshToken := string(signed)
 
 	// Save tokens to database.
-	_, err = db.NamedExec("UPDATE users SET access_token=:access_token, refresh_token=:refresh_token WHERE login=:login", User{
-		Login:        login,
-		AccessToken:  signedAccessToken,
-		RefreshToken: signedRefreshToken,
-	})
+	err = userSaveTokens(login, signedAccessToken, signedRefreshToken)
 	if err != nil {
 		return "", "", fmt.Errorf("could not save tokens to db: %s", err.Error())
 	}
@@ -90,7 +79,7 @@ func validateRequestToken(r *http.Request) error {
 
 func validateToken(tokenString string, tokenType TokenType) (jwt.Token, error) {
 	if tokenType != AccessToken && tokenType != RefreshToken {
-		err := fmt.Errorf("unexpected token type %s", tokenType)
+		err := fmt.Errorf("wrong token type: %s", tokenType)
 		logger.Error(err.Error())
 		return nil, err
 	}
@@ -115,14 +104,7 @@ func validateToken(tokenString string, tokenType TokenType) (jwt.Token, error) {
 		return nil, errors.New("could not find login in token")
 	}
 
-	var dbToken string
-
-	switch tokenType {
-	case AccessToken:
-		err = db.QueryRowx("SELECT access_token FROM users WHERE login = ?", login).Scan(&dbToken)
-	case RefreshToken:
-		err = db.QueryRowx("SELECT refresh_token FROM users WHERE login = ?", login).Scan(&dbToken)
-	}
+	dbToken, err := userGetToken(login, tokenType)
 
 	if err != nil {
 		return nil, errors.New("token is not valid")
