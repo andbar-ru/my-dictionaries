@@ -36,6 +36,7 @@ func main() {
 	router := gin.Default()
 	router.GET("/login", handleLogin)
 	router.POST("/refresh_token", handleRefreshToken)
+	router.GET("/logout", JWTMiddleware, handleLogout)
 
 	api := router.Group("/api")
 	api.Use(JWTMiddleware)

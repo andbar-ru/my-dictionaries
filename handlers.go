@@ -46,6 +46,33 @@ func handleLogin(c *gin.Context) {
 	c.JSON(http.StatusOK, tokens)
 }
 
+// handleLogout handles /logout.
+func handleLogout(c *gin.Context) {
+	token, err := extractToken(c.Request)
+	if err != nil {
+		text := "failed to extract JWT token"
+		logger.Error("%s: %s", text, err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": text})
+		return
+	}
+	loginI, _ := token.Get("login")
+	login, _ := loginI.(string)
+	if login == "" {
+		text := "failed to fetch login from token"
+		logger.Error("%s: %s", text, err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": text})
+		return
+	}
+	_, err = db.NamedExec("UPDATE users SET access_token='', refresh_token='' WHERE login = :login", User{Login: login})
+	if err != nil {
+		text := "failed to clear tokens of user " + login
+		logger.Error("%s: %s", text, err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": text})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
+}
+
 // handleRefreshToken handles /refresh_token.
 func handleRefreshToken(c *gin.Context) {
 	mapToken := make(map[string]string)
